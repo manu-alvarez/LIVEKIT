@@ -445,41 +445,6 @@ async def entrypoint(ctx: JobContext) -> None:
                 llm=model,
             )
             
-            @agent.on("agent_speech_committed")
-            def on_agent_speech_committed(msg: llm.ChatMessage):
-                import json
-                import asyncio
-                if ctx.room.isconnected():
-                    content = getattr(msg, "content", "")
-                    if isinstance(content, list):
-                        content = " ".join([c.text for c in content if hasattr(c, "text")])
-                    elif not isinstance(content, str):
-                        content = str(content)
-                    payload = json.dumps({
-                        "id": getattr(msg, "id", "agent_msg"),
-                        "message": content,
-                        "isUser": False
-                    }).encode('utf-8')
-                    asyncio.create_task(ctx.room.local_participant.publish_data(payload, topic="lk-chat"))
-
-            @agent.on("user_speech_committed")
-            def on_user_speech_committed(msg: llm.ChatMessage):
-                import json
-                import asyncio
-                if ctx.room.isconnected():
-                    content = getattr(msg, "content", "")
-                    if isinstance(content, list):
-                        content = " ".join([c.text for c in content if hasattr(c, "text")])
-                    elif not isinstance(content, str):
-                        content = str(content)
-                    payload = json.dumps({
-                        "id": getattr(msg, "id", "user_msg"),
-                        "message": content,
-                        "isUser": True
-                    }).encode('utf-8')
-                    asyncio.create_task(ctx.room.local_participant.publish_data(payload, topic="lk-chat"))
-
-            
         else:
             logger.info(f"Initializing Modular Voice Pipeline: {pipeline_cfg.get('name')}")
             # Load VAD
@@ -530,6 +495,54 @@ async def entrypoint(ctx: JobContext) -> None:
         logger.info("Starting AgentSession...")
         start_time = datetime.now()
         await session.start(agent=agent, room=ctx.room)
+
+        # ---------------------------------------------------------------------------
+        # Chat Transcript Hooks (registered AFTER session.start)
+        # Publish text transcriptions to Data Channel for the React frontend
+        # ---------------------------------------------------------------------------
+        import json as _json
+
+        @session.on("agent_speech_committed")
+        def _on_agent_speech(msg):
+            try:
+                content = getattr(msg, "content", "")
+                if isinstance(content, list):
+                    content = " ".join([c.text for c in content if hasattr(c, "text")])
+                elif not isinstance(content, str):
+                    content = str(content)
+                if not content.strip():
+                    return
+                payload = _json.dumps({
+                    "id": str(id(msg)),
+                    "message": content,
+                    "isUser": False
+                }).encode("utf-8")
+                asyncio.create_task(
+                    ctx.room.local_participant.publish_data(payload, topic="lk-chat")
+                )
+            except Exception as e:
+                logger.warning(f"Chat hook (agent) error: {e}")
+
+        @session.on("user_speech_committed")
+        def _on_user_speech(msg):
+            try:
+                content = getattr(msg, "content", "")
+                if isinstance(content, list):
+                    content = " ".join([c.text for c in content if hasattr(c, "text")])
+                elif not isinstance(content, str):
+                    content = str(content)
+                if not content.strip():
+                    return
+                payload = _json.dumps({
+                    "id": str(id(msg)),
+                    "message": content,
+                    "isUser": True
+                }).encode("utf-8")
+                asyncio.create_task(
+                    ctx.room.local_participant.publish_data(payload, topic="lk-chat")
+                )
+            except Exception as e:
+                logger.warning(f"Chat hook (user) error: {e}")
 
         async def send_initial_greeting():
             await asyncio.sleep(1.0)
