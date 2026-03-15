@@ -402,19 +402,15 @@ async def entrypoint(ctx: JobContext) -> None:
         architecture = pipeline_cfg.get("architecture", "realtime")
         system_prompt = build_system_prompt()
 
-        class SessionTools(llm.ToolContext):
-            @llm.function_tool(
-                description="Use THIS tool ONLY to hang up, end, or terminate the call when the user says goodbye or no longer needs assistance."
-            )
-            async def end_call(self):
-                """End the current call session physically by disconnecting the room."""
-                logger.info("Tool: end_call() invoked. Disconnecting room...")
-                asyncio.create_task(ctx.room.disconnect())
-                return "Desconectando llamada..."
+        @llm.function_tool(
+            description="Use THIS tool ONLY to hang up, end, or terminate the call when the user says goodbye or no longer needs assistance."
+        )
+        async def end_call() -> str:
+            """End the current call session physically by disconnecting the room."""
+            logger.info("Tool: end_call() invoked. Disconnecting room...")
+            asyncio.create_task(ctx.room.disconnect())
+            return "Desconectando llamada..."
 
-        # Instantiate dynamic tools wrapper
-        dynamic_tools = SessionTools()
-        
         agent_tools = [
             check_availability,
             create_reservation,
@@ -423,7 +419,7 @@ async def entrypoint(ctx: JobContext) -> None:
             find_reservations,
             consultar_carta_restaurante,
             consultar_conocimiento_restaurante,
-            dynamic_tools, # LiveKit tool context allows appending class instances
+            end_call,
         ]
 
         if architecture == "realtime":
