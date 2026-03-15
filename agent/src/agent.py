@@ -278,6 +278,36 @@ async def consultar_carta_restaurante(
         return "Error al obtener la carta del restaurante."
 
 
+@llm.function_tool(
+    description=(
+        "Consult the internal restaurant manual / knowledge base (RAG). "
+        "Use this if the customer asks about rules (dress code, pets, corkage fee), "
+        "history of the restaurant, or policies not covered by general info."
+    )
+)
+async def consultar_conocimiento_restaurante(query: str) -> str:
+    """Query the restaurant's internal knowledge base."""
+    logger.info("Tool: consultar_conocimiento_restaurante(query=%s)", query)
+    
+    # Simple hardcoded mock RAG for Phase 14 representation
+    knowledge_base = {
+        "mascotas": "El restaurante admite mascotas en la zona de terraza exterior. En el interior solo se admiten perros guía.",
+        "vestimenta": "El código de vestimenta es 'smart casual'. No se permite ropa de baño ni chanclas.",
+        "corcho": "El descorche de botellas traídas del exterior tiene un coste de 15€ por botella.",
+        "historia": "El restaurante fue fundado en 1998 por la familia Álvarez, combinando la tradición mediterránea con toques vanguardistas.",
+        "cumpleaños": "Para cumpleaños, ofrecemos un postre de cortesía al homenajeado si se avisa con antelación en la reserva."
+    }
+    
+    query_lower = query.lower()
+    for key, info in knowledge_base.items():
+        if key in query_lower:
+            return info
+            
+    return (
+        "Según el manual del restaurante, no tengo una respuesta específica para esa consulta. "
+        "Le sugiero que hable directamente con el encargado al (555) 123-456."
+    )
+
 # ---------------------------------------------------------------------------
 # System Instructions — Restaurant Personality
 # ---------------------------------------------------------------------------
@@ -392,6 +422,7 @@ async def entrypoint(ctx: JobContext) -> None:
             get_restaurant_info,
             find_reservations,
             consultar_carta_restaurante,
+            consultar_conocimiento_restaurante,
             dynamic_tools, # LiveKit tool context allows appending class instances
         ]
 
@@ -459,7 +490,14 @@ async def entrypoint(ctx: JobContext) -> None:
             vad = None
             try:
                 from livekit.plugins import silero
-                vad = silero.VAD.load()
+                vad_sensitivity = float(pipeline_cfg.get("vad_sensitivity", 0.5))
+                # Ajuste Nivel Dios de SileroVAD para entorno de restaurante de fondo
+                vad = silero.VAD.load(
+                    min_silence_duration=0.5,     # Pausas más naturales antes de que la IA responda
+                    min_speech_duration=0.1,      # Ignorar ruidos breves de fondo
+                    max_buffered_speech=60.0,
+                    activation_threshold=vad_sensitivity
+                )
             except ImportError:
                 logger.warning("Silero VAD not found. Modular pipeline may have degraded turn detection.")
 
