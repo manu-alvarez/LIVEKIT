@@ -1,4 +1,5 @@
-import axios, { InternalAxiosRequestConfig } from 'axios'
+import axios from 'axios'
+import type { InternalAxiosRequestConfig } from 'axios'
 
 const api = axios.create({
   baseURL: '/api/dev',
