@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { InternalAxiosRequestConfig } from 'axios'
 
 const api = axios.create({
   baseURL: '/api/dev',
@@ -7,6 +7,18 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
 })
+
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+export const login = (data: URLSearchParams) => axios.post('/api/login', data, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+});
 
 export interface LLMConfig {
   id: number

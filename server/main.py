@@ -14,14 +14,16 @@ import logging
 import os
 import shutil
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from urllib.error import URLError
 from urllib.request import urlopen
 
 import uvicorn
+import jwt
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from livekit.api import AccessToken, LiveKitAPI, VideoGrants
 from livekit.api.agent_dispatch_service import CreateAgentDispatchRequest
@@ -43,6 +45,54 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# Authentication (JWT)
+# ---------------------------------------------------------------------------
+
+SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-ias-auth-key")
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except Exception:
+        raise credentials_exception
+    return username
+
+@app.post("/api/login")
+async def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    admin_user = os.getenv("ADMIN_USERNAME", "admin")
+    admin_pass = os.getenv("ADMIN_PASSWORD", "nikolina2026")
+    
+    if form_data.username != admin_user or form_data.password != admin_pass:
+        raise HTTPException(status_code=400, detail="Incorrect username or password")
+    
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": form_data.username}, expires_delta=access_token_expires
+    )
+    return {"access_token": access_token, "token_type": "bearer"}
 
 
 # ---------------------------------------------------------------------------
@@ -422,23 +472,23 @@ async def _dispatch_agent(url: str, key: str, secret: str, room: str) -> None:
 
 
 @app.get("/api/restaurant")
-def get_restaurant():
+def get_restaurant(current_user: str = Depends(get_current_user)):
     return db.get_restaurant_info()
 
 
 @app.put("/api/restaurant")
-def update_restaurant(info: RestaurantInfoUpdate):
+def update_restaurant(info: RestaurantInfoUpdate, current_user: str = Depends(get_current_user)):
     db.update_restaurant_info(**info.model_dump(exclude_unset=True))
     return {"status": "success"}
 
 
 @app.get("/api/tables")
-def get_tables(active_only: bool = False):
+def get_tables(active_only: bool = False, current_user: str = Depends(get_current_user)):
     return db.get_tables(active_only=active_only)
 
 
 @app.post("/api/tables")
-def create_table(table: TableCreate):
+def create_table(table: TableCreate, current_user: str = Depends(get_current_user)):
     tid = db.create_table(
         table.table_number, table.capacity, table.location, table.description
     )
@@ -446,13 +496,13 @@ def create_table(table: TableCreate):
 
 
 @app.put("/api/tables/{table_id}")
-def update_table(table_id: int, table: TableUpdate):
+def update_table(table_id: int, table: TableUpdate, current_user: str = Depends(get_current_user)):
     db.update_table(table_id, **table.model_dump(exclude_unset=True))
     return {"status": "success"}
 
 
 @app.delete("/api/tables/{table_id}")
-def delete_table(table_id: int):
+def delete_table(table_id: int, current_user: str = Depends(get_current_user)):
     db.delete_table(table_id)
     return {"status": "success"}
 
@@ -463,12 +513,12 @@ def delete_table(table_id: int):
 
 
 @app.get("/api/menu")
-def get_menu(category: Optional[str] = None, available_only: bool = True):
+def get_menu(category: Optional[str] = None, available_only: bool = True, current_user: str = Depends(get_current_user)):
     return db.get_menu(category=category, available_only=available_only)
 
 
 @app.post("/api/menu")
-def create_menu_item(item: MenuItemCreate):
+def create_menu_item(item: MenuItemCreate, current_user: str = Depends(get_current_user)):
     item_id = db.create_menu_item(
         name=item.name,
         description=item.description,
@@ -482,24 +532,24 @@ def create_menu_item(item: MenuItemCreate):
 
 
 @app.put("/api/menu/{item_id}")
-def update_menu_item(item_id: int, item: MenuItemUpdate):
+def update_menu_item(item_id: int, item: MenuItemUpdate, current_user: str = Depends(get_current_user)):
     db.update_menu_item(item_id, **item.model_dump(exclude_unset=True))
     return {"status": "success"}
 
 
 @app.delete("/api/menu/{item_id}")
-def delete_menu_item(item_id: int):
+def delete_menu_item(item_id: int, current_user: str = Depends(get_current_user)):
     db.delete_menu_item(item_id)
     return {"status": "success"}
 
 
 @app.get("/api/reservations")
-def get_reservations(date: Optional[str] = None, status: Optional[str] = None):
+def get_reservations(date: Optional[str] = None, status: Optional[str] = None, current_user: str = Depends(get_current_user)):
     return db.get_reservations(date=date, status=status)
 
 
 @app.post("/api/reservations")
-def create_reservation(res: ReservationCreate):
+def create_reservation(res: ReservationCreate, current_user: str = Depends(get_current_user)):
     try:
         return db.create_reservation(
             customer_name=res.customer_name,
@@ -515,7 +565,7 @@ def create_reservation(res: ReservationCreate):
 
 
 @app.delete("/api/reservations/{reservation_id}")
-def cancel_reservation(reservation_id: int):
+def cancel_reservation(reservation_id: int, current_user: str = Depends(get_current_user)):
     success = db.cancel_reservation(reservation_id=reservation_id)
     if not success:
         raise HTTPException(
@@ -525,17 +575,17 @@ def cancel_reservation(reservation_id: int):
 
 
 @app.get("/api/calls")
-def get_calls(limit: int = 50):
+def get_calls(limit: int = 50, current_user: str = Depends(get_current_user)):
     return db.get_call_log(limit=limit)
 
 
 @app.get("/api/stats")
-def get_stats(date: Optional[str] = None):
+def get_stats(date: Optional[str] = None, current_user: str = Depends(get_current_user)):
     return db.get_stats(date=date)
 
 
 @app.get("/api/check_availability")
-def check_availability(date: str, time: str, num_guests: int):
+def check_availability(date: str, time: str, num_guests: int, current_user: str = Depends(get_current_user)):
     return db.check_availability(date, time, num_guests)
 
 
@@ -545,43 +595,43 @@ def check_availability(date: str, time: str, num_guests: int):
 
 
 @app.get("/api/dev/llm-config")
-def get_llm_config():
+def get_llm_config(current_user: str = Depends(get_current_user)):
     return db.get_llm_config()
 
 
 @app.put("/api/dev/llm-config")
-def update_llm_config(config: LLMConfigUpdate):
+def update_llm_config(config: LLMConfigUpdate, current_user: str = Depends(get_current_user)):
     db.update_llm_config(**config.model_dump(exclude_unset=True))
     return {"status": "success"}
 
 
 @app.get("/api/dev/voices")
-def get_available_voices():
+def get_available_voices(current_user: str = Depends(get_current_user)):
     return {"voices": AVAILABLE_VOICES}
 
 
 @app.get("/api/dev/models")
-def get_available_models():
+def get_available_models(current_user: str = Depends(get_current_user)):
     return {"models": AVAILABLE_MODELS}
 
 
 @app.get("/api/dev/pipeline-catalog")
-def get_pipeline_catalog():
+def get_pipeline_catalog(current_user: str = Depends(get_current_user)):
     return PIPELINE_CATALOG
 
 
 @app.get("/api/dev/pipeline-config")
-def get_active_pipeline_config():
+def get_active_pipeline_config(current_user: str = Depends(get_current_user)):
     return db.get_active_pipeline_config()
 
 
 @app.get("/api/dev/pipeline-configs")
-def get_all_pipeline_configs():
+def get_all_pipeline_configs(current_user: str = Depends(get_current_user)):
     return {"configs": db.list_pipeline_configs()}
 
 
 @app.put("/api/dev/pipeline-config/{config_id}")
-def update_pipeline_config(config_id: int, config: PipelineConfigUpdate):
+def update_pipeline_config(config_id: int, config: PipelineConfigUpdate, current_user: str = Depends(get_current_user)):
     updated = db.update_pipeline_config(
         config_id, **config.model_dump(exclude_unset=True)
     )
@@ -597,7 +647,7 @@ def update_pipeline_config(config_id: int, config: PipelineConfigUpdate):
 
 
 @app.post("/api/dev/pipeline-config/{config_id}/activate")
-def activate_pipeline(config_id: int):
+def activate_pipeline(config_id: int, current_user: str = Depends(get_current_user)):
     ok = db.activate_pipeline(config_id)
     if not ok:
         raise HTTPException(status_code=404, detail="Pipeline config not found")
@@ -606,18 +656,18 @@ def activate_pipeline(config_id: int):
 
 
 @app.get("/api/dev/providers/status")
-def get_providers_status():
+def get_providers_status(current_user: str = Depends(get_current_user)):
     return _providers_status()
 
 
 @app.post("/api/dev/reset-agent")
-async def reset_agent():
+async def reset_agent(current_user: str = Depends(get_current_user)):
     logger.info("Agent reset requested")
     return {"status": "success", "message": "Agent reset signal sent"}
 
 
 @app.get("/api/dev/status")
-async def get_agent_status():
+async def get_agent_status(current_user: str = Depends(get_current_user)):
     # Uptime of the server process itself
     uptime_raw = (
         os.popen('ps -p $(pgrep -f "server.py") -o etimes= 2>/dev/null || echo 0')
@@ -686,7 +736,7 @@ async def get_agent_status():
 
 
 @app.get("/api/dev/logs")
-async def get_recent_logs(limit: int = 50):
+async def get_recent_logs(limit: int = 50, current_user: str = Depends(get_current_user)):
     try:
         result = subprocess.run(
             [

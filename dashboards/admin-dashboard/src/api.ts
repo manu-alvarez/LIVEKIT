@@ -12,6 +12,18 @@ export const api = axios.create({
     },
 });
 
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+});
+
+export const login = (data: URLSearchParams) => api.post('/login', data, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+});
+
 export const getStats = (date?: string) => api.get('/stats', { params: { date } });
 export const getReservations = (date?: string, status?: string) => api.get('/reservations', { params: { date, status } });
 export const createReservation = (data: any) => api.post('/reservations', data);
