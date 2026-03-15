@@ -1,0 +1,8 @@
+sip_port: 5060
+redis:
+  address: localhost:6380
+logging:
+  level: info
+api_key: MSB_LIVEKIT_API_KEY
+api_secret: MSB_SUPER_SECRET_LIVEKIT_SECRET_KEY_2026
+ws_url: ws://localhost:7880

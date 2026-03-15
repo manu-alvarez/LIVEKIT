@@ -1,0 +1,32 @@
+# LiveKit Server Configuration - Production
+# For domain: livekit.alvarezconsult.com
+
+port: 7880
+
+rtc:
+  port_range_start: 50000
+  port_range_end: 60000
+  tcp_port: 7881
+  use_external_ip: true
+
+redis:
+  address: localhost:6380
+
+keys:
+  ha2Mw9O9u3p55l6jwPlknw: 7106jAn_zB34kpnx9uloTUCCml1dWlmBeuUHt89VEns
+
+room:
+  auto_create: true
+  empty_timeout: 300
+  max_participants: 100
+
+logging:
+  level: info
+  pion_level: info
+
+  domain: turn.alvarezconsult.com
+
+
+audio:
+  active_level: 30
+  min_percentile: 40
