@@ -1,0 +1,4 @@
+agent.log
+*.DS_Store
+server/data/*.db-shm
+server/data/*.db-wal

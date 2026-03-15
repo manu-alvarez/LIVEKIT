@@ -1,0 +1,78 @@
+2026-03-15 13:53:27,745 - msb-assistant - INFO - Worker process prewarmed (pid=2094374)
+2026-03-15 13:53:27,745 - msb-assistant - INFO - Worker process prewarmed (pid=2094374)
+2026-03-15 13:53:27,753 - msb-assistant - INFO - Worker process prewarmed (pid=2094378)
+2026-03-15 13:53:27,753 - msb-assistant - INFO - Worker process prewarmed (pid=2094378)
+2026-03-15 13:53:27,757 - msb-assistant - INFO - Worker process prewarmed (pid=2094380)
+2026-03-15 13:53:27,757 - msb-assistant - INFO - Worker process prewarmed (pid=2094380)
+2026-03-15 13:53:27,764 - msb-assistant - INFO - Worker process prewarmed (pid=2094376)
+2026-03-15 13:53:27,764 - msb-assistant - INFO - Worker process prewarmed (pid=2094376)
+2026-03-15 15:45:29,996 - msb-assistant - INFO - Worker process prewarmed (pid=2135862)
+2026-03-15 15:45:29,996 - msb-assistant - INFO - Worker process prewarmed (pid=2135862)
+2026-03-15 15:45:29,999 - msb-assistant - INFO - Worker process prewarmed (pid=2135864)
+2026-03-15 15:45:30,002 - msb-assistant - INFO - Worker process prewarmed (pid=2135866)
+2026-03-15 15:45:29,999 - msb-assistant - INFO - Worker process prewarmed (pid=2135864)
+2026-03-15 15:45:30,002 - msb-assistant - INFO - Worker process prewarmed (pid=2135866)
+2026-03-15 15:45:30,008 - msb-assistant - INFO - Worker process prewarmed (pid=2135868)
+2026-03-15 15:45:30,008 - msb-assistant - INFO - Worker process prewarmed (pid=2135868)
+2026-03-15 18:52:30,762 - msb-assistant - INFO - Worker process prewarmed (pid=2195890)
+2026-03-15 18:52:30,762 - msb-assistant - INFO - Worker process prewarmed (pid=2195890)
+2026-03-15 18:52:30,773 - msb-assistant - INFO - Worker process prewarmed (pid=2195892)
+2026-03-15 18:52:30,773 - msb-assistant - INFO - Worker process prewarmed (pid=2195892)
+2026-03-15 18:52:30,783 - msb-assistant - INFO - Worker process prewarmed (pid=2195894)
+2026-03-15 18:52:30,783 - msb-assistant - INFO - Worker process prewarmed (pid=2195894)
+2026-03-15 18:52:30,795 - msb-assistant - INFO - Worker process prewarmed (pid=2195896)
+2026-03-15 18:52:30,795 - msb-assistant - INFO - Worker process prewarmed (pid=2195896)
+2026-03-15 19:27:50,640 - msb-assistant - INFO - --- New Agent Session: AJ_pb2bWjNPTqLt ---
+2026-03-15 19:27:50,640 - msb-assistant - INFO - --- New Agent Session: AJ_pb2bWjNPTqLt ---
+2026-03-15 19:27:50,783 - msb-assistant - INFO - Worker process prewarmed (pid=2206545)
+2026-03-15 19:27:50,783 - msb-assistant - INFO - Worker process prewarmed (pid=2206545)
+2026-03-15 19:27:50,796 - msb-assistant - ERROR - CRITICAL ERROR in entrypoint: ToolContext.__init__() missing 1 required positional argument: 'tools'
+Traceback (most recent call last):
+  File "/home/ubuntu/LIVEKIT/agent/src/agent.py", line 416, in entrypoint
+    dynamic_tools = SessionTools()
+                    ^^^^^^^^^^^^^^
+TypeError: ToolContext.__init__() missing 1 required positional argument: 'tools'
+2026-03-15 19:27:50,798 - msb-assistant - INFO - Agent process cleanup
+2026-03-15 19:27:50,796 - msb-assistant - ERROR - CRITICAL ERROR in entrypoint: ToolContext.__init__() missing 1 required positional argument: 'tools'
+Traceback (most recent call last):
+  File "/home/ubuntu/LIVEKIT/agent/src/agent.py", line 416, in entrypoint
+    dynamic_tools = SessionTools()
+                    ^^^^^^^^^^^^^^
+TypeError: ToolContext.__init__() missing 1 required positional argument: 'tools'
+Traceback (most recent call last):
+  File "/home/ubuntu/LIVEKIT/agent/src/agent.py", line 416, in entrypoint
+    dynamic_tools = SessionTools()
+                    ^^^^^^^^^^^^^^
+TypeError: ToolContext.__init__() missing 1 required positional argument: 'tools'
+2026-03-15 19:27:50,798 - msb-assistant - INFO - Agent process cleanup
+2026-03-15 19:28:00,991 - msb-assistant - INFO - --- New Agent Session: AJ_52Az3TdqpLvK ---
+2026-03-15 19:28:00,991 - msb-assistant - INFO - --- New Agent Session: AJ_52Az3TdqpLvK ---
+2026-03-15 19:28:01,139 - msb-assistant - INFO - Worker process prewarmed (pid=2206607)
+2026-03-15 19:28:01,139 - msb-assistant - ERROR - CRITICAL ERROR in entrypoint: ToolContext.__init__() missing 1 required positional argument: 'tools'
+Traceback (most recent call last):
+  File "/home/ubuntu/LIVEKIT/agent/src/agent.py", line 416, in entrypoint
+    dynamic_tools = SessionTools()
+                    ^^^^^^^^^^^^^^
+TypeError: ToolContext.__init__() missing 1 required positional argument: 'tools'
+2026-03-15 19:28:01,143 - msb-assistant - INFO - Agent process cleanup
+2026-03-15 19:28:01,139 - msb-assistant - ERROR - CRITICAL ERROR in entrypoint: ToolContext.__init__() missing 1 required positional argument: 'tools'
+Traceback (most recent call last):
+  File "/home/ubuntu/LIVEKIT/agent/src/agent.py", line 416, in entrypoint
+    dynamic_tools = SessionTools()
+                    ^^^^^^^^^^^^^^
+TypeError: ToolContext.__init__() missing 1 required positional argument: 'tools'
+Traceback (most recent call last):
+  File "/home/ubuntu/LIVEKIT/agent/src/agent.py", line 416, in entrypoint
+    dynamic_tools = SessionTools()
+                    ^^^^^^^^^^^^^^
+TypeError: ToolContext.__init__() missing 1 required positional argument: 'tools'
+2026-03-15 19:28:01,143 - msb-assistant - INFO - Agent process cleanup
+2026-03-15 19:28:01,139 - msb-assistant - INFO - Worker process prewarmed (pid=2206607)
+2026-03-15 20:12:50,843 - msb-assistant - INFO - Worker process prewarmed (pid=2220333)
+2026-03-15 20:12:50,843 - msb-assistant - INFO - Worker process prewarmed (pid=2220333)
+2026-03-15 20:12:50,851 - msb-assistant - INFO - Worker process prewarmed (pid=2220337)
+2026-03-15 20:12:50,851 - msb-assistant - INFO - Worker process prewarmed (pid=2220337)
+2026-03-15 20:12:50,861 - msb-assistant - INFO - Worker process prewarmed (pid=2220331)
+2026-03-15 20:12:50,861 - msb-assistant - INFO - Worker process prewarmed (pid=2220331)
+2026-03-15 20:12:50,875 - msb-assistant - INFO - Worker process prewarmed (pid=2220335)
+2026-03-15 20:12:50,875 - msb-assistant - INFO - Worker process prewarmed (pid=2220335)
