@@ -392,7 +392,7 @@ async def entrypoint(ctx: JobContext) -> None:
         if not pipeline_cfg:
             logger.warning("No active pipeline configuration found. Fallback to Gemini 2.5 Native.")
             pipeline_cfg = {
-                "name": "Fallback Gemini",
+                "name": "Fallback Gemini 2.5",
                 "architecture": "realtime",
                 "realtime_model": "gemini-2.5-flash-native-audio-latest",
                 "realtime_voice": "Aoede",
@@ -491,16 +491,12 @@ async def entrypoint(ctx: JobContext) -> None:
                 vad=vad,
             )
 
-        # Start Session
-        logger.info("Starting AgentSession...")
-        start_time = datetime.now()
-        await session.start(agent=agent, room=ctx.room)
-
         # ---------------------------------------------------------------------------
-        # Chat Transcript Hooks (registered AFTER session.start)
+        # Chat Transcript Hooks (registered BEFORE session.start)
         # Publish text transcriptions to Data Channel for the React frontend
         # ---------------------------------------------------------------------------
         import json as _json
+        _greeted = False
 
         @session.on("agent_speech_committed")
         def _on_agent_speech(msg):
@@ -544,7 +540,16 @@ async def entrypoint(ctx: JobContext) -> None:
             except Exception as e:
                 logger.warning(f"Chat hook (user) error: {e}")
 
+        # Start Session
+        logger.info("Starting AgentSession...")
+        start_time = datetime.now()
+        await session.start(agent=agent, room=ctx.room)
+
         async def send_initial_greeting():
+            nonlocal _greeted
+            if _greeted:
+                return
+            _greeted = True
             await asyncio.sleep(1.0)
             logger.info("Nikolina sending proactive greeting...")
             try:
@@ -581,9 +586,10 @@ async def entrypoint(ctx: JobContext) -> None:
 
         logger.info("Nikolina is fully OPERATIONAL and listening")
         
-        # Keep process alive while room is active
-        while ctx.room.isconnected():
-            await asyncio.sleep(1)
+        # Keep process alive until room disconnects
+        disconnect_event = asyncio.Event()
+        ctx.room.on("disconnected", lambda: disconnect_event.set())
+        await disconnect_event.wait()
 
     except Exception as exc:
         logger.error(f"CRITICAL ERROR in entrypoint: {exc}", exc_info=True)

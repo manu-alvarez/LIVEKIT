@@ -24,8 +24,6 @@ logging:
   level: info
   pion_level: info
 
-  domain: turn.alvarezconsult.com
-
 
 audio:
   active_level: 30

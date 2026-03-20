@@ -83,30 +83,6 @@ services:
         limits:
           memory: 4G
 
-  # Vosk STT English: Port 2700
-  vosk-en:
-    image: alphacep/kaldi-en:latest
-    container_name: msb-vosk-en
-    ports:
-      - "2700:2700"
-    volumes:
-      - vosk_models_en:/models
-    networks:
-      - msb-network
-    restart: unless-stopped
-
-  # Vosk STT Spanish: Port 2701
-  vosk-es:
-    image: alphacep/kaldi-es:latest
-    container_name: msb-vosk-es
-    ports:
-      - "2701:2700"
-    volumes:
-      - vosk_models_es:/models
-    networks:
-      - msb-network
-    restart: unless-stopped
-
 networks:
   msb-network:
     driver: bridge
@@ -114,7 +90,4 @@ networks:
 volumes:
   ollama_data:
   whisper_models:
-  tts_models:
-  vosk_models_en:
-  vosk_models_es:
-  kokoro_models:
+

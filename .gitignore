@@ -1,4 +1,30 @@
-agent.log
-*.DS_Store
-server/data/*.db-shm
-server/data/*.db-wal
+# Dependencies
+node_modules/
+venv/
+venv_*/
+
+# Environment & Secrets
+.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Build output
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store

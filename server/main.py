@@ -8,6 +8,12 @@ Exposes:
 """
 
 import asyncio
+import sys
+import os
+# Ensure the local src is in the path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
+
 import importlib.util
 import json
 import logging
@@ -38,9 +44,14 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="MSB LiveKit Token Server")
 
+ALLOWED_ORIGINS = os.getenv(
+    "CORS_ORIGINS",
+    "https://livekit.alvarezconsult.com,http://localhost:5173,http://localhost:5174"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,7 +61,10 @@ app.add_middleware(
 # Authentication (JWT)
 # ---------------------------------------------------------------------------
 
-SECRET_KEY = os.getenv("JWT_SECRET", "super-secret-ias-auth-key")
+SECRET_KEY = os.getenv("JWT_SECRET")
+if not SECRET_KEY:
+    logger.warning("JWT_SECRET not set — using insecure default. Set JWT_SECRET in .env for production!")
+    SECRET_KEY = "super-secret-ias-auth-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
 
@@ -82,8 +96,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
 
 @app.post("/api/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
-    admin_user = os.getenv("ADMIN_USERNAME", "admin")
-    admin_pass = os.getenv("ADMIN_PASSWORD", "nikolina2026")
+    admin_user = os.getenv("ADMIN_USERNAME")
+    admin_pass = os.getenv("ADMIN_PASSWORD")
+    if not admin_user or not admin_pass:
+        raise HTTPException(status_code=500, detail="Admin credentials not configured. Set ADMIN_USERNAME and ADMIN_PASSWORD.")
     
     if form_data.username != admin_user or form_data.password != admin_pass:
         raise HTTPException(status_code=400, detail="Incorrect username or password")
@@ -803,4 +819,5 @@ async def get_recent_logs(limit: int = 50, current_user: str = Depends(get_curre
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8081)
+    port = int(os.getenv("PORT", "8000"))
+    uvicorn.run(app, host="0.0.0.0", port=port)

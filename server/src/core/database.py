@@ -13,8 +13,12 @@ from typing import Optional
 
 logger = logging.getLogger("msb-assistant")
 
-# Force absolute path for production consistency
-DB_PATH = "/home/ubuntu/LIVEKIT/server/data/restaurant.db"
+# Dynamic database path (supports Local and VPS)
+# __file__ is /server/src/core/database.py -> we need /server/data/restaurant.db
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DEFAULT_DB_PATH = os.path.join(BASE_DIR, "data", "restaurant.db")
+DB_PATH = os.getenv("DB_PATH", DEFAULT_DB_PATH)
+
 logger.info(f"Database module charging. Path: {DB_PATH}")
 
 
@@ -26,7 +30,7 @@ class RestaurantDB:
         self._init_db()
 
     def _get_conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, check_same_thread=False)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
@@ -224,7 +228,7 @@ class RestaurantDB:
                         id, model_name, voice, temperature, system_prompt,
                         enable_internet_search, vad_sensitivity, turn_detection_mode, max_call_duration_minutes
                     )
-                    VALUES (1, 'gemini-2.5-flash-native-audio-latest', 'Aoede', 0.7, ?, 0, 0.5, 'normal', 30)
+                    VALUES (1, 'gemini-1.5-flash', 'Aoede', 0.7, ?, 0, 0.5, 'normal', 30)
                     """,
                     (default_prompt,),
                 )
@@ -265,14 +269,14 @@ class RestaurantDB:
                     """,
                     [
                         (
-                            "Gemini 2.5 Native Realtime",
+                            "Gemini 2.5 Flash Native Audio",
                             "realtime",
                             "gemini",
                             "gemini-2.5-flash-native-audio-latest",
                             None,
                             0.7,
                             "google-stt",
-                            "gemini-1.5-flash",
+                            "gemini-2.5-flash-native-audio-latest",
                             "es",
                             None,
                             "google-tts",
@@ -282,12 +286,34 @@ class RestaurantDB:
                             "gemini",
                             "gemini-2.5-flash-native-audio-latest",
                             "Aoede",
-                            "gemini-1.5-flash",
+                            "gemini-2.5-flash-native-audio-latest",
                             "Aoede",
                             1,
                         ),
                         (
-                            "Gemini 1.5 Realtime",
+                            "Gemini 1.5 Native Realtime (Flash-8B)",
+                            "realtime",
+                            "gemini",
+                            "gemini-1.5-flash-8b",
+                            None,
+                            0.7,
+                            "google-stt",
+                            "gemini-1.5-flash-8b",
+                            "es",
+                            None,
+                            "google-tts",
+                            "Puck",
+                            1.0,
+                            None,
+                            "gemini",
+                            "gemini-1.5-flash-8b",
+                            "Puck",
+                            "gemini-1.5-flash-8b",
+                            "Puck",
+                            0,
+                        ),
+                        (
+                            "Gemini 1.5 Realtime (Flash)",
                             "realtime",
                             "gemini",
                             "gemini-1.5-flash",
@@ -298,22 +324,22 @@ class RestaurantDB:
                             "es",
                             None,
                             "google-tts",
-                            "Aoede",
+                            "Puck",
                             1.0,
                             None,
                             "gemini",
                             "gemini-1.5-flash",
-                            "Aoede",
+                            "Puck",
                             "gemini-1.5-flash",
-                            "Aoede",
+                            "Puck",
                             0,
                         ),
                         (
                             "Local Modular",
                             "modular",
-                            "ollama",
-                            "llama3.2:3b",
-                            "http://localhost:11434/v1",
+                            "gemini",
+                            "gemini-1.5-flash",
+                            None,
                             0.7,
                             "faster-whisper",
                             "base",
@@ -324,7 +350,7 @@ class RestaurantDB:
                             1.0,
                             "http://localhost:8880",
                             "gemini",
-                            "gemini-2.5-flash-native-audio-latest",
+                            "gemini-1.5-flash",
                             "Aoede",
                             "gemini-1.5-flash",
                             "Aoede",
@@ -333,6 +359,46 @@ class RestaurantDB:
                     ],
                 )
                 logger.info("Seeded default pipeline profiles")
+
+            # Migration: Add Gemini 2.5 to EXISTING databases that don't have it yet
+            existing_25 = conn.execute(
+                "SELECT 1 FROM pipeline_configs WHERE realtime_model = 'gemini-2.5-flash-native-audio-latest'"
+            ).fetchone()
+            if not existing_25:
+                conn.execute(
+                    """
+                    INSERT INTO pipeline_configs (
+                        name, architecture, llm_provider, llm_model, llm_base_url, llm_temperature,
+                        stt_provider, stt_model, stt_language, stt_server_url,
+                        tts_provider, tts_voice, tts_speed, tts_server_url,
+                        realtime_provider, realtime_model, realtime_voice,
+                        google_stt_model, google_tts_voice, is_active
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "Gemini 2.5 Flash Native Audio",
+                        "realtime",
+                        "gemini",
+                        "gemini-2.5-flash-native-audio-latest",
+                        None,
+                        0.7,
+                        "google-stt",
+                        "gemini-2.5-flash-native-audio-latest",
+                        "es",
+                        None,
+                        "google-tts",
+                        "Aoede",
+                        1.0,
+                        None,
+                        "gemini",
+                        "gemini-2.5-flash-native-audio-latest",
+                        "Aoede",
+                        "gemini-2.5-flash-native-audio-latest",
+                        "Aoede",
+                        0,
+                    ),
+                )
+                logger.info("Migration: Added Gemini 2.5 Flash Native Audio pipeline")
 
             conn.commit()
         finally:
