@@ -71,9 +71,26 @@ cd /home/ubuntu/LIVEKIT/frontend
 npm install --silent
 npm run build
 
+echo "🏗️ Construyendo admin-dashboard..."
+cd /home/ubuntu/LIVEKIT/dashboards/admin-dashboard
+npm install --silent
+npm run build
+
+echo "🏗️ Construyendo dev-dashboard..."
+cd /home/ubuntu/LIVEKIT/dashboards/dev-dashboard
+npm install --silent
+npm run build
+
 echo "🔄 Reiniciando servicios..."
 sudo systemctl restart livekit-server.service
 sudo systemctl restart livekit-agent.service
+
+echo "🌐 Actualizando configuración de Nginx..."
+if [ -f "/home/ubuntu/LIVEKIT/config/nginx/dev-dashboard.conf" ]; then
+    sudo cp /home/ubuntu/LIVEKIT/config/nginx/dev-dashboard.conf /etc/nginx/sites-available/livekit
+    sudo ln -sf /etc/nginx/sites-available/livekit /etc/nginx/sites-enabled/
+    sudo systemctl reload nginx
+fi
 
 sleep 3
 echo ""
