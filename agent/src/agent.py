@@ -21,6 +21,7 @@ import asyncio
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
+import json as _json
 
 from dotenv import load_dotenv
 
@@ -236,6 +237,20 @@ async def find_reservations(
 
 @llm.function_tool(
     description=(
+        "Log a special request, preference, or note from the customer (e.g., 'mesa cerca de la ventana', 'alergia al gluten', 'aniversario'). "
+        "Use this as soon as the customer mentions any specific requirement to ensure it is recorded in the call log."
+    )
+)
+async def log_special_request(
+    request: str
+) -> str:
+    """Record a special request in the session notes."""
+    logger.info("Tool: log_special_request(request=%s)", request)
+    return f"Nota registrada: {request}. Tendremos esto en cuenta."
+
+
+@llm.function_tool(
+    description=(
         "Get the restaurant menu. Can optionally filter by category: "
         "'entrante', 'principal', 'postre', 'bebida', 'tapa', 'especial'. "
         "Use this when a customer asks about the menu, dishes, prices, or allergens."
@@ -276,6 +291,29 @@ async def consultar_carta_restaurante(
     except Exception as exc:
         logger.error("consultar_carta_restaurante failed: %s", exc)
         return "Error al obtener la carta del restaurante."
+
+
+async def get_summary(messages) -> str:
+    """Generate a brief summary of the conversation."""
+    if not messages:
+        return "No hubo conversación."
+    
+    # Simple logic to determine outcome for summary
+    user_msgs = [m for m in messages if m["isUser"]]
+    if not user_msgs:
+        return "El usuario no habló."
+    
+    return f"Conversación con {len(messages)} mensajes. Último mensaje: {messages[-1]['message'][:50]}"
+
+
+async def send_metadata(ctx: JobContext, metadata: dict):
+    """Utility to send JSON metadata to the frontend via DataChannel."""
+    try:
+        import json as _json
+        payload = _json.dumps(metadata).encode("utf-8")
+        await ctx.room.local_participant.publish_data(payload, topic="lk-metadata")
+    except Exception as e:
+        logger.warning(f"Failed to send metadata: {e}")
 
 
 @llm.function_tool(
@@ -370,7 +408,8 @@ REGLAS DE COMPORTAMIENTO:
 8. Si preguntan por la dirección u horarios, usa get_restaurant_info.
 9. Mantén las respuestas cortas y naturales — esto es una conversación telefónica.
 10. No inventes información. Si no sabes algo, di que va a consultarlo con el personal.
-11. Al despedirte, agradece la llamada y desea un buen día/noche."""
+11. Al despedirte, agradece la llamada y desea un buen día/noche.
+12. IMPORTANTE: Si el cliente menciona alguna petición especial, preferencia de mesa, o alergia, usa el comando 'log_special_request' de inmediato para registrarlo."""
 
 
 # ---------------------------------------------------------------------------
@@ -402,6 +441,14 @@ async def entrypoint(ctx: JobContext) -> None:
         architecture = pipeline_cfg.get("architecture", "realtime")
         system_prompt = build_system_prompt()
 
+        session_state = {
+            "result": "Nula/Consulta", # Default to Consulta
+            "notes": []
+        }
+        messages_history = []
+        _greeted = False
+
+        # Enhanced tool wrappers to track outcome
         @llm.function_tool(
             description="Use THIS tool ONLY to hang up, end, or terminate the call when the user says goodbye or no longer needs assistance."
         )
@@ -411,14 +458,78 @@ async def entrypoint(ctx: JobContext) -> None:
             asyncio.create_task(ctx.room.disconnect())
             return "Desconectando llamada..."
 
+        @llm.function_tool(
+            description="Log a special request, preference, or note from the customer."
+        )
+        async def wrap_log_special_request(request: str) -> str:
+            session_state["notes"].append(request)
+            return await log_special_request(request)
+
+        @llm.function_tool(
+            description="Create a table reservation at the restaurant."
+        )
+        async def wrap_create_reservation(
+            customer_name: str, 
+            date: str, 
+            time: str, 
+            num_guests: int,
+            customer_phone: str = "", 
+            notes: str = ""
+        ) -> str:
+            res = await create_reservation(
+                customer_name=customer_name,
+                date=date,
+                time=time,
+                num_guests=num_guests,
+                customer_phone=customer_phone,
+                notes=notes
+            )
+            if "Reserva confirmada" in res:
+                session_state["result"] = "Reserva"
+            return res
+
+        @llm.function_tool(
+            description="Cancel an existing reservation."
+        )
+        async def wrap_cancel_reservation(
+            customer_name: str = "", 
+            customer_phone: str = "", 
+            reservation_id: int = 0
+        ) -> str:
+            res = await cancel_reservation(
+                customer_name=customer_name,
+                customer_phone=customer_phone,
+                reservation_id=reservation_id
+            )
+            if "cancelada correctamente" in res:
+                session_state["result"] = "Cancelación"
+            return res
+
+        @llm.function_tool(
+            description="Look up existing reservations for modification or checking."
+        )
+        async def wrap_find_reservations(customer_phone: str) -> str:
+            res = await find_reservations(customer_phone=customer_phone)
+            if "Reservas encontradas" in res:
+                session_state["result"] = "Modificación"
+            return res
+
+        @llm.function_tool(
+            description="Consult the restaurant menu."
+        )
+        async def wrap_consultar_carta(category: str = "") -> str:
+            asyncio.create_task(send_metadata(ctx, {"action": "show_menu"}))
+            return await consultar_carta_restaurante(category=category)
+
         agent_tools = [
             check_availability,
-            create_reservation,
-            cancel_reservation,
+            wrap_create_reservation,
+            wrap_cancel_reservation,
             get_restaurant_info,
-            find_reservations,
-            consultar_carta_restaurante,
+            wrap_find_reservations,
+            wrap_consultar_carta,
             consultar_conocimiento_restaurante,
+            wrap_log_special_request,
             end_call,
         ]
 
@@ -429,8 +540,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 logger.error("GOOGLE_API_KEY is not set")
                 return
 
+            # Gemini 3.1 Flash Live - The cutting edge of real-time voice
             model = RealtimeModel(
-                model=pipeline_cfg.get("realtime_model", "gemini-2.5-flash-native-audio-latest"),
+                model=pipeline_cfg.get("realtime_model", "gemini-3.1-flash-live"),
                 api_key=api_key,
                 voice=pipeline_cfg.get("realtime_voice", "Aoede"),
                 instructions=system_prompt,
@@ -508,6 +620,18 @@ async def entrypoint(ctx: JobContext) -> None:
                     content = str(content)
                 if not content.strip():
                     return
+
+                # Mood detection heuristics
+                mood = "calm"
+                lower_content = content.lower()
+                if any(w in lower_content for w in ["perfecto", "genial", "excelente", "disfrute", "bienvenido"]):
+                    mood = "happy"
+                elif any(w in lower_content for w in ["problema", "error", "lo siento", "disculpe"]):
+                    mood = "urgent"
+
+                messages_history.append({"isUser": False, "message": content})
+                asyncio.create_task(send_metadata(ctx, {"mood": mood}))
+
                 payload = _json.dumps({
                     "id": str(id(msg)),
                     "message": content,
@@ -529,6 +653,8 @@ async def entrypoint(ctx: JobContext) -> None:
                     content = str(content)
                 if not content.strip():
                     return
+
+                messages_history.append({"isUser": True, "message": content})
                 payload = _json.dumps({
                     "id": str(id(msg)),
                     "message": content,
@@ -565,16 +691,26 @@ async def entrypoint(ctx: JobContext) -> None:
             asyncio.create_task(send_initial_greeting())
 
         async def log_final_call():
-            logger.info("Shutdown: logging call history")
+            logger.info("Shutdown: logging call history with MSB Enhanced Tracking")
             try:
                 end_time = datetime.now()
                 duration = int((end_time - start_time).total_seconds())
+                
+                # Get a final summary from the thread before closing
+                try:
+                    summary = await get_summary(messages_history)
+                except:
+                    summary = "Llamada finalizada."
+
                 db.log_call(
                     room_name=ctx.room.name, 
-                    result="unknown", 
-                    summary="Llamada cerrada.", 
+                    result=session_state["result"], 
+                    summary=summary,
+                    notes=" | ".join(session_state["notes"]),
+                    transcription="\n".join([f"{'Usuario' if m['isUser'] else 'Nikolina'}: {m['message']}" for m in messages_history]),
                     duration_seconds=max(0, duration)
                 )
+                logger.info(f"LOGGED: Result={session_state['result']}, Messages={len(messages_history)}")
             except Exception as e:
                 logger.error(f"Failed to log call: {e}")
 

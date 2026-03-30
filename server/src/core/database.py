@@ -99,11 +99,9 @@ class RestaurantDB:
                     started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     ended_at TIMESTAMP,
                     duration_seconds INTEGER DEFAULT 0,
-                    result TEXT DEFAULT 'unknown' CHECK(result IN (
-                        'reservation_created','reservation_cancelled',
-                        'info_request','no_action','unknown'
-                    )),
+                    result TEXT DEFAULT 'unknown', 
                     summary TEXT DEFAULT '',
+                    notes TEXT DEFAULT '',
                     transcription TEXT DEFAULT ''
                 );
 
@@ -148,7 +146,7 @@ class RestaurantDB:
 
                 CREATE TABLE IF NOT EXISTS menu_items (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL,
+                    name TEXT NOT NULL UNIQUE,
                     description TEXT DEFAULT '',
                     category TEXT NOT NULL DEFAULT 'principal' CHECK(category IN (
                         'entrante','principal','postre','bebida','tapa','especial'
@@ -157,6 +155,7 @@ class RestaurantDB:
                     allergens TEXT DEFAULT '',
                     is_available BOOLEAN DEFAULT 1,
                     is_daily_special BOOLEAN DEFAULT 0,
+                    image_url TEXT DEFAULT '',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
 
@@ -165,6 +164,7 @@ class RestaurantDB:
                 CREATE INDEX IF NOT EXISTS idx_call_log_started ON call_log(started_at);
                 CREATE INDEX IF NOT EXISTS idx_pipeline_configs_active ON pipeline_configs(is_active);
                 CREATE INDEX IF NOT EXISTS idx_menu_items_category ON menu_items(category);
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_menu_items_name_unique ON menu_items(name);
                 """
             )
 
@@ -179,6 +179,12 @@ class RestaurantDB:
             self._safe_add_column(conn, "pipeline_configs", "realtime_voice", "TEXT DEFAULT 'Aoede'")
             self._safe_add_column(conn, "pipeline_configs", "google_stt_model", "TEXT DEFAULT 'gemini-1.5-flash'")
             self._safe_add_column(conn, "pipeline_configs", "google_tts_voice", "TEXT DEFAULT 'Aoede'")
+            # Backward compatible migrations for menu_items
+            self._safe_add_column(conn, "menu_items", "image_url", "TEXT DEFAULT ''")
+            # Backward compatible migrations for call_log
+            self._safe_add_column(conn, "call_log", "notes", "TEXT DEFAULT ''")
+            # Ensure result column exists if not already there (should be)
+            self._safe_add_column(conn, "call_log", "result", "TEXT DEFAULT 'unknown'")
 
             # Seed restaurant
             if conn.execute("SELECT COUNT(*) AS c FROM restaurant_info").fetchone()["c"] == 0:
@@ -235,25 +241,34 @@ class RestaurantDB:
                 logger.info("Seeded default LLM config")
 
             # Seed menu items
-            if conn.execute("SELECT COUNT(*) AS c FROM menu_items").fetchone()["c"] == 0:
-                default_menu = [
-                    ('Ensalada Mediterránea', 'Tomate, pepino, aceitunas, queso feta y vinagreta de limón', 'entrante', 9.50, 'lácteos', 1, 0),
-                    ('Croquetas de Jamón Ibérico', 'Croquetas caseras crujientes con bechamel suave', 'entrante', 8.00, 'gluten,lácteos', 1, 0),
-                    ('Gazpacho Andaluz', 'Sopa fría de tomate, pimiento y pepino', 'entrante', 7.00, '', 1, 0),
-                    ('Lubina a la Plancha', 'Lubina fresca con verduras de temporada y aceite de oliva virgen', 'principal', 18.50, 'pescado', 1, 0),
-                    ('Paella Valenciana', 'Arroz con pollo, judías verdes, garrofón y azafrán', 'principal', 16.00, '', 1, 0),
-                    ('Solomillo de Ternera', 'Solomillo con reducción de Pedro Ximénez y patatas al horno', 'principal', 22.00, '', 1, 0),
-                    ('Risotto de Setas', 'Arroz cremoso con setas de temporada y parmesano', 'principal', 14.50, 'lácteos,gluten', 1, 0),
-                    ('Tiramisú Casero', 'Bizcocho de café con mascarpone y cacao', 'postre', 7.50, 'gluten,lácteos,huevo', 1, 0),
-                    ('Tarta de Queso', 'Tarta horneada con base de galleta y coulis de frutos rojos', 'postre', 7.00, 'gluten,lácteos,huevo', 1, 0),
-                    ('Sangría de la Casa', 'Vino tinto con frutas de temporada y especias', 'bebida', 5.00, '', 1, 0),
-                    ('Agua Mineral', 'Botella 750ml', 'bebida', 2.50, '', 1, 0),
-                ]
-                conn.executemany(
-                    "INSERT INTO menu_items (name, description, category, price, allergens, is_available, is_daily_special) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                    default_menu,
+            # Using INSERT OR REPLACE or similar logic to ensure gourmet assets are updated
+            default_menu = [
+                ('Ensalada Mediterránea', 'Tomate, pepino, aceitunas, queso feta y vinagreta de limón', 'entrante', 12.50, 'lácteos', 1, 0, '/assets/ensalada.png'),
+                ('Croquetas de Jamón Ibérico', 'Croquetas caseras 100% Bellota con bechamel extra cremosa.', 'entrante', 14.00, 'gluten,lácteos', 1, 0, '/assets/croquetas.png'),
+                ('Gazpacho Andaluz', 'Receta tradicional con tomates de la huerta y aceite AOVE.', 'entrante', 9.00, '', 1, 0, ''),
+                ('Lubina a la Plancha', 'Lubina salvaje a la brasa con guarnición de verduras asadas.', 'principal', 24.50, 'pescado', 1, 0, '/assets/lubina.png'),
+                ('Paella Valenciana', 'Tradicional paella de marisco con arroz bomba y azafrán de hebra.', 'principal', 22.00, '', 1, 0, '/assets/paella.png'),
+                ('Solomillo de Ternera', 'Solomillo de ternera nacional con reducción de Pedro Ximénez.', 'principal', 28.00, '', 1, 0, '/assets/solomillo.png'),
+                ('Risotto de Setas', 'Arroz cremoso con setas de temporada y parmesano gallego.', 'principal', 18.50, 'lácteos,gluten', 1, 0, ''),
+                ('Tiramisú Casero', 'Bizcocho de café con mascarpone y cacao', 'postre', 7.50, 'gluten,lácteos,huevo', 1, 0, ''),
+                ('Tarta de Queso', 'Tarta horneada con base de galleta y coulis de frutos rojos', 'postre', 7.00, 'gluten,lácteos,huevo', 1, 0, '/assets/tarta.png'),
+                ('Sangría de la Casa', 'Vino tinto con frutas de temporada y especias', 'bebida', 5.00, '', 1, 0, ''),
+                ('Agua Mineral', 'Botella 750ml', 'bebida', 2.50, '', 1, 0, ''),
+            ]
+            
+            for item in default_menu:
+                conn.execute(
+                    """
+                    INSERT INTO menu_items (name, description, category, price, allergens, is_available, is_daily_special, image_url)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(name) DO UPDATE SET
+                        description=excluded.description,
+                        price=excluded.price,
+                        image_url=excluded.image_url
+                    """,
+                    item,
                 )
-                logger.info("Seeded %d default menu items", len(default_menu))
+            logger.info("Seeded/Updated %d menu items with gourmet assets", len(default_menu))
 
             # Seed pipeline profiles
             if conn.execute("SELECT COUNT(*) AS c FROM pipeline_configs").fetchone()["c"] == 0:
@@ -268,6 +283,28 @@ class RestaurantDB:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     [
+                        (
+                            "Gemini 3.1 Flash Live (Primary)",
+                            "realtime",
+                            "gemini",
+                            "gemini-3.1-flash-live",
+                            None,
+                            0.7,
+                            "google-stt",
+                            "gemini-3.1-flash-live",
+                            "es",
+                            None,
+                            "google-tts",
+                            "Aoede",
+                            1.0,
+                            None,
+                            "gemini",
+                            "gemini-3.1-flash-live",
+                            "Aoede",
+                            "gemini-3.1-flash-live",
+                            "Aoede",
+                            1
+                        ),
                         (
                             "Gemini 2.5 Flash Native Audio",
                             "realtime",
@@ -288,7 +325,7 @@ class RestaurantDB:
                             "Aoede",
                             "gemini-2.5-flash-native-audio-latest",
                             "Aoede",
-                            1,
+                            0,
                         ),
                         (
                             "Gemini 1.5 Native Realtime (Flash-8B)",
@@ -817,6 +854,7 @@ class RestaurantDB:
         room_name: str = "",
         result: str = "unknown",
         summary: str = "",
+        notes: str = "",
         transcription: str = "",
         duration_seconds: int = 0,
     ) -> int:
@@ -824,10 +862,10 @@ class RestaurantDB:
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO call_log (caller_id, room_name, result, summary, transcription, duration_seconds)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO call_log (caller_id, room_name, result, summary, notes, transcription, duration_seconds)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (caller_id, room_name, result, summary, transcription, duration_seconds),
+                (caller_id, room_name, result, summary, notes, transcription, duration_seconds),
             )
             conn.commit()
             return cursor.lastrowid
