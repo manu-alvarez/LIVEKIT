@@ -728,15 +728,47 @@ class RestaurantDB:
         notes: str = "",
         source: str = "phone",
     ) -> dict:
-        available = self.check_availability(date, time, num_guests)
-        if not available:
-            raise ValueError(
-                f"No tables available for {num_guests} guests on {date} at {time}."
-            )
-
-        best_table = available[0]
         conn = self._get_conn()
         try:
+            # 1. ATOMIC LOCK: Block DB for other concurrent writers until commit or rollback
+            conn.execute("BEGIN EXCLUSIVE TRANSACTION")
+            
+            # 2. Re-implement the check_availability logic using the locked connection
+            info = dict(conn.execute("SELECT * FROM restaurant_info WHERE id = 1").fetchone())
+            slot_minutes = info.get("reservation_slot_minutes", 30)
+
+            query = """
+                SELECT t.* FROM tables t
+                WHERE t.is_active = 1
+                  AND t.capacity >= ?
+                  AND t.id NOT IN (
+                      SELECT r.table_id FROM reservations r
+                      WHERE r.date = ?
+                        AND r.status = 'confirmed'
+                        AND r.table_id IS NOT NULL
+                        AND (
+                            (r.time <= ? AND time(r.time, '+' || ? || ' minutes') > ?)
+                            OR (r.time < time(?, '+' || ? || ' minutes') AND r.time >= ?)
+                        )
+                  )
+                ORDER BY t.capacity ASC, t.table_number ASC
+            """
+            rows = conn.execute(
+                query,
+                (num_guests, date, time, slot_minutes, time, time, slot_minutes, time),
+            ).fetchall()
+            
+            available = [dict(r) for r in rows]
+
+            if not available:
+                conn.rollback()
+                raise ValueError(
+                    f"No tables available for {num_guests} guests on {date} at {time}."
+                )
+
+            best_table = available[0]
+            
+            # 3. INSERT knowing with 100% certainty the table hasn't been stolen by another call
             cursor = conn.execute(
                 """
                 INSERT INTO reservations
@@ -766,6 +798,9 @@ class RestaurantDB:
                 "table_location": best_table["location"],
                 "status": "confirmed",
             }
+        except Exception as e:
+            conn.rollback() # Release the lock if anything fails
+            raise e
         finally:
             conn.close()
 
