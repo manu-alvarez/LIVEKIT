@@ -429,9 +429,9 @@ async def entrypoint(ctx: JobContext) -> None:
 
         pipeline_cfg = db.get_active_pipeline_config()
         if not pipeline_cfg:
-            logger.warning("No active pipeline configuration found. Fallback to Gemini 2.5 Native.")
+            logger.warning("No active pipeline configuration found. Fallback to Gemini 2.5 Stable.")
             pipeline_cfg = {
-                "name": "Fallback Gemini 2.5",
+                "name": "Gemini 2.5 Stable",
                 "architecture": "realtime",
                 "realtime_model": "gemini-2.5-flash-native-audio-latest",
                 "realtime_voice": "Aoede",
@@ -486,6 +486,7 @@ async def entrypoint(ctx: JobContext) -> None:
             )
             if "Reserva confirmada" in res:
                 session_state["result"] = "Reserva"
+                asyncio.create_task(send_metadata(ctx, {"mood": "happy"}))
             return res
 
         @llm.function_tool(
@@ -503,6 +504,7 @@ async def entrypoint(ctx: JobContext) -> None:
             )
             if "cancelada correctamente" in res:
                 session_state["result"] = "Cancelación"
+                asyncio.create_task(send_metadata(ctx, {"mood": "calm"}))
             return res
 
         @llm.function_tool(
@@ -540,9 +542,9 @@ async def entrypoint(ctx: JobContext) -> None:
                 logger.error("GOOGLE_API_KEY is not set")
                 return
 
-            # Gemini 3.1 Flash Live - The cutting edge of real-time voice
+            # Gemini 2.5 Flash Native Audio - The proven high-reliability voice engine
             model = RealtimeModel(
-                model=pipeline_cfg.get("realtime_model", "gemini-3.1-flash-live"),
+                model=pipeline_cfg.get("realtime_model", "gemini-2.5-flash-native-audio-latest"),
                 api_key=api_key,
                 voice=pipeline_cfg.get("realtime_voice", "Aoede"),
                 instructions=system_prompt,

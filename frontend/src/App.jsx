@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     LiveKitRoom,
-    VoiceAssistantControlBar,
     RoomAudioRenderer,
     useVoiceAssistant,
     useRoomContext,
 } from '@livekit/components-react';
-import { RoomEvent } from 'livekit-client';
-import '@livekit/components-styles';
+import { RoomEvent, Track } from 'livekit-client';
+import { useLocalParticipant } from '@livekit/components-react';
 import './index.css';
 
 // Premium Components
@@ -15,24 +14,42 @@ import LuxMenu from './components/LuxMenu';
 import SidebarGlass from './components/SidebarGlass';
 
 // ---------------------------------------------------------------------------
-// Room Interaction Logic
+// Custom Mute Button (replaces VoiceAssistantControlBar entirely)
 // ---------------------------------------------------------------------------
+const MuteToggle = () => {
+    const { localParticipant } = useLocalParticipant();
+    const [muted, setMuted] = useState(false);
 
+    const toggle = useCallback(async () => {
+        if (!localParticipant) return;
+        const newMuted = !muted;
+        await localParticipant.setMicrophoneEnabled(!newMuted);
+        setMuted(newMuted);
+    }, [localParticipant, muted]);
+
+    return (
+        <button className="btn-mute" onClick={toggle} title={muted ? 'Activar micrófono' : 'Silenciar'}>
+            {muted ? '🔇 SILENCIADO' : '🎙️ MICRÓFONO'}
+        </button>
+    );
+};
+
+// ---------------------------------------------------------------------------
+// Metadata Sync — Receives mood & menu signals from the agent
+// ---------------------------------------------------------------------------
 const MetadataSync = ({ setMood, setShowMenu }) => {
     const room = useRoomContext();
     
     useEffect(() => {
         if (!room) return;
-        const handleData = (payload, participant, kind, topic) => {
-            if (topic === 'lk-metadata') {
-                try {
-                    const data = JSON.parse(new TextDecoder().decode(payload));
-                    if (data.mood) setMood(data.mood);
-                    if (data.show_menu) setShowMenu(true);
-                    if (data.action === 'show_menu') setShowMenu(true);
-                } catch (e) {
-                    console.error("Metadata error:", e);
-                }
+        const handleData = (payload) => {
+            try {
+                const data = JSON.parse(new TextDecoder().decode(payload));
+                console.log('[MSB] Metadata:', data);
+                if (data.mood) setMood(data.mood);
+                if (data.show_menu || data.action === 'show_menu') setShowMenu(true);
+            } catch (e) {
+                // Not JSON metadata, ignore
             }
         };
         room.on(RoomEvent.DataReceived, handleData);
@@ -42,37 +59,48 @@ const MetadataSync = ({ setMood, setShowMenu }) => {
     return null;
 };
 
-// Static version for when no Room context exists
+// ---------------------------------------------------------------------------
+// Static Orb (disconnected state)
+// ---------------------------------------------------------------------------
 const StaticOrb = () => (
     <div className="orb-portal">
-        <div className="orb-ring-outer" style={{ borderColor: 'rgba(212, 175, 55, 0.1)' }} />
-        <div className="orb-core" style={{ background: 'radial-gradient(circle at 35% 35%, #555 0%, #111 60%, transparent 90%)', boxShadow: '0 0 40px rgba(0,0,0,0.5)' }} />
-        <div className="status-badge" style={{ bottom: '-60px' }}>
-            <span className="dot" style={{ background: '#444' }} />
-            OFFLINE
+        <div className="orb-ring-outer" />
+        <div className="orb-core" />
+        <div className="status-badge">
+            <span className="dot" />
+            DESCONECTADO
         </div>
     </div>
 );
 
-// Live version for when Room context is available (Neuralrealistic Upgrade v4.0)
+// ---------------------------------------------------------------------------
+// Live Orb — Reacts to voice state + mood for color/animation shifts
+// ---------------------------------------------------------------------------
 const LuxuryOrbPortal = ({ mood = 'calm' }) => {
     const { state } = useVoiceAssistant();
     const isActive = state !== 'inactive';
+
+    const stateMap = {
+        'inactive': 'DESCONECTADO',
+        'listening': 'ESCUCHANDO...',
+        'thinking': 'PENSANDO...',
+        'speaking': 'HABLANDO...',
+    };
     
     return (
         <div className="orb-portal">
             <div className="orb-ring-outer" />
-            <div className={`orb-core ${isActive ? 'active' : ''} ${mood}`} />
-            <div className="status-badge" style={{ bottom: '-60px' }}>
+            <div className={`orb-core ${isActive ? 'active' : ''} mood-${mood} state-${state}`} />
+            <div className="status-badge">
                 <span className={`dot ${isActive ? 'pulse' : ''}`} />
-                {state.toUpperCase()}
+                {stateMap[state] || state?.toUpperCase() || 'CONECTANDO...'}
             </div>
         </div>
     );
 };
 
 // ---------------------------------------------------------------------------
-// Root App Component
+// Root App
 // ---------------------------------------------------------------------------
 export default function App() {
     const [token, setToken] = useState("");
@@ -91,7 +119,6 @@ export default function App() {
             setMood('calm');
             return;
         }
-
         setConnecting(true);
         try {
             const response = await fetch(`/api/token`, {
@@ -102,11 +129,8 @@ export default function App() {
                     room_name: "msb-restaurante"
                 })
             });
-
             const data = await response.json();
-            if (data.accessToken) {
-                setToken(data.accessToken);
-            }
+            if (data.accessToken) setToken(data.accessToken);
         } catch (e) {
             console.error("Connection failed", e);
             alert("Error al conectar con el servidor MSB.");
@@ -116,81 +140,76 @@ export default function App() {
     }, [token]);
 
     return (
-        <div className="app-container">
-            <main className="main-stage">
-                <header style={{ textAlign: 'center', marginBottom: '4rem' }}>
-                    <h1 style={{ fontFamily: 'Playfair Display', fontSize: '4.5rem', color: 'var(--gold-primary)', letterSpacing: '4px' }}>RESTAURANTE MSB</h1>
-                    <p style={{ fontFamily: 'Inter', color: 'var(--text-muted)', letterSpacing: '8px', fontSize: '0.9rem', opacity: 0.6 }}>MALASOMBRABROSS LUXURY</p>
-                </header>
+        <>
+            {/* Atmospheric Background — OUTSIDE app-container so nothing covers it */}
+            <div className="bg-atmosphere" />
 
-                {!token ? (
-                    <div style={{ 
-                        flex: 1,
-                        display: 'flex', 
-                        flexDirection: 'column', 
-                        alignItems: 'center', 
-                        justifyContent: 'center',
-                        animation: 'fadeInUp 1.2s cubic-bezier(0.16, 1, 0.3, 1)',
-                        width: '100%'
-                    }}>
-                        <StaticOrb />
-                        <div style={{ marginTop: '5rem', textAlign: 'center' }}>
-                            <h2 style={{ fontSize: '1.2rem', color: 'var(--gold-bright)', marginBottom: '1.5rem', letterSpacing: '4px', textTransform: 'uppercase' }}>NIKOLINA IS WAITING...</h2>
-                            <button className="btn-luxury" onClick={handleConnect} disabled={connecting}>
-                                {connecting ? 'INICIANDO PROTOCOLO...' : 'ESTABLECER CONEXIÓN'}
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <LiveKitRoom
-                        serverUrl={serverUrl}
-                        token={token}
-                        connect={true}
-                        audio={true}
-                        style={{ display: 'contents' }}
-                    >
-                        <MetadataSync setMood={setMood} setShowMenu={setShowMenu} />
-                        
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
-                            <LuxuryOrbPortal mood={mood} />
+            <div className="app-container">
+                <main className="main-stage">
+                    <header className="app-header">
+                        <h1 className="luxury-title">RESTAURANTE MSB</h1>
+                        <p className="luxury-subtitle">MALASOMBRABROSS LUXURY</p>
+                    </header>
 
-                            <div style={{ display: 'flex', gap: '2rem', margin: '8rem 0 4rem', flexWrap: 'wrap', justifyContent: 'center', width: '100%' }}>
-                                <button className="btn-luxury" style={{ background: 'transparent', border: '1px solid var(--gold-primary)', color: 'var(--gold-primary)', minWidth: '220px' }} onClick={() => setShowMenu(true)}>
-                                    VER MENÚ
-                                </button>
-                                <button className="btn-luxury" style={{ padding: '0.8rem 1.5rem', fontSize: '0.8rem', background: 'var(--accent-rose)', boxShadow: 'none', minWidth: '220px' }} onClick={handleConnect}>
-                                    DESCONECTAR
-                                </button>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255,255,255,0.03)', padding: '0.8rem 1.5rem', borderRadius: '4px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                                <VoiceAssistantControlBar controls={{ leave: false }} />
-                                <button 
-                                    className={`btn-toggle-sidebar ${sidebarVisible ? 'active' : ''}`}
-                                    onClick={() => setSidebarVisible(!sidebarVisible)}
-                                    title="Historial de Transcripción"
-                                >
-                                    {sidebarVisible ? 'OCULTAR HISTORIAL' : 'VER HISTORIAL MSB'}
+                    {!token ? (
+                        <div className="connection-portal">
+                            <StaticOrb />
+                            <div className="connection-controls">
+                                <h2 className="portal-message">NIKOLINA TE ESTÁ ESPERANDO...</h2>
+                                <button className="btn-luxury" onClick={handleConnect} disabled={connecting}>
+                                    {connecting ? 'INICIANDO PROTOCOLO...' : 'ESTABLECER CONEXIÓN'}
                                 </button>
                             </div>
                         </div>
+                    ) : (
+                        <LiveKitRoom
+                            serverUrl={serverUrl}
+                            token={token}
+                            connect={true}
+                            audio={true}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', background: 'transparent' }}
+                        >
+                            <MetadataSync setMood={setMood} setShowMenu={setShowMenu} />
+                            
+                            <div className="live-interface">
+                                <LuxuryOrbPortal mood={mood} />
 
-                        {showMenu && <LuxMenu onClose={() => setShowMenu(false)} />}
-                        
-                        <RoomAudioRenderer />
-                        <SidebarGlass 
-                            messages={messages} 
-                            setMessages={setMessages} 
-                            visible={sidebarVisible} 
-                            onClose={() => setSidebarVisible(false)} 
-                        />
-                    </LiveKitRoom>
-                )}
-            </main>
+                                <div className="action-row">
+                                    <button className="btn-luxury btn-menu" onClick={() => setShowMenu(true)}>
+                                        VER MENÚ
+                                    </button>
+                                    <button className="btn-luxury btn-disconnect" onClick={handleConnect}>
+                                        DESCONECTAR
+                                    </button>
+                                </div>
 
-            <footer style={{ position: 'fixed', bottom: '2rem', left: '2rem', opacity: 0.3 }}>
-                <p style={{ fontSize: '0.65rem', letterSpacing: '4px' }}>POWERED BY MSB AI NETWORKS</p>
-            </footer>
-        </div>
+                                <div className="controls-row">
+                                    <MuteToggle />
+                                    <button 
+                                        className={`btn-toggle-sidebar ${sidebarVisible ? 'active' : ''}`}
+                                        onClick={() => setSidebarVisible(!sidebarVisible)}
+                                    >
+                                        {sidebarVisible ? 'OCULTAR' : 'HISTORIAL'}
+                                    </button>
+                                </div>
+                            </div>
+
+                            {showMenu && <LuxMenu onClose={() => setShowMenu(false)} />}
+                            <RoomAudioRenderer />
+                            <SidebarGlass 
+                                messages={messages} 
+                                setMessages={setMessages} 
+                                visible={sidebarVisible} 
+                                onClose={() => setSidebarVisible(false)} 
+                            />
+                        </LiveKitRoom>
+                    )}
+                </main>
+
+                <footer className="app-footer">
+                    <p>POTENCIADO POR MSB AI NETWORKS</p>
+                </footer>
+            </div>
+        </>
     );
 }

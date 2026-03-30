@@ -4,21 +4,21 @@ const MENU_DATA = {
   entrantes: [
     { id: 11, name: 'CROQUETAS DE JAMÓN IBÉRICO', price: '14€', desc: '100% Bellota, rebozado panko y bechamel extra cremosa.', img: '/assets/croquetas.png', tag: 'TOP VENTAS' },
     { id: 12, name: 'ENSALADA MEDITERRÁNEA', price: '12.5€', desc: 'Tomate, pepino, aceitunas kalamata, queso feta y AOVE.', img: '/assets/ensalada.png' },
-    { id: 13, name: 'GAZPACHO ANDALUZ', price: '9€', desc: 'Receta tradicional con picatoste de jamón y huevo.', img: '' },
+    { id: 13, name: 'GAZPACHO ANDALUZ', price: '9€', desc: 'Receta tradicional con picatoste de jamón y huevo.', img: '/assets/gazpacho.png' },
   ],
   principales: [
     { id: 21, name: 'PAELLA VALENCIANA', price: '22€', desc: 'Arroz bomba, marisco fresco y azafrán de hebra.', img: '/assets/paella.png', tag: 'ESPECIALIDAD' },
     { id: 22, name: 'SOLOMILLO DE TERNERA', price: '28€', desc: 'Nacional, a la brasa con reducción de Pedro Ximénez.', img: '/assets/solomillo.png' },
     { id: 23, name: 'LUBINA A LA PLANCHA', price: '24.5€', desc: 'Salvaje, con emulsión de ajos tiernos y verduras.', img: '/assets/lubina.png' },
-    { id: 24, name: 'RISOTTO DE SETAS', price: '18.5€', desc: 'Cremoso de boletus con lascas de parmesano gallego.', img: '' },
+    { id: 24, name: 'RISOTTO DE SETAS', price: '18.5€', desc: 'Cremoso de boletus con lascas de parmesano gallego.', img: '/assets/risotto.png' },
   ],
   postres: [
     { id: 31, name: 'TARTA DE QUESO MSB', price: '8.5€', desc: 'Horneada al estilo San Sebastián con frutos rojos.', img: '/assets/tarta.png' },
-    { id: 32, name: 'TIRAMISÚ CASERO', price: '7.5€', desc: 'Bizcocho al Amaretto y mascarpone artesanal.', img: '' },
+    { id: 32, name: 'TIRAMISÚ CASERO', price: '7.5€', desc: 'Bizcocho al Amaretto y mascarpone artesanal.', img: '/assets/tiramisu.png' },
   ],
   bebidas: [
-    { id: 41, name: 'SANGRÍA DE LA CASA', price: '5€', desc: 'Receta secreta MSB con fruta de temporada.', img: '' },
-    { id: 42, name: 'CAVA RESERVA', price: '24€', desc: 'Brut Nature Selección Especial.', img: '' },
+    { id: 41, name: 'SANGRÍA DE LA CASA', price: '5€', desc: 'Receta secreta MSB con fruta de temporada.', img: '/assets/sangria.png' },
+    { id: 42, name: 'CAVA RESERVA', price: '24€', desc: 'Brut Nature Selección Especial.', img: '/assets/cava.png' },
   ]
 };
 
