@@ -28,7 +28,7 @@ from urllib.request import urlopen
 import uvicorn
 import jwt
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from livekit.api import AccessToken, LiveKitAPI, VideoGrants
@@ -36,6 +36,7 @@ from livekit.api.agent_dispatch_service import CreateAgentDispatchRequest
 from pydantic import BaseModel
 
 from src.core.database import db
+from src.core.token_policy import TokenRateLimiter
 
 load_dotenv()
 
@@ -43,6 +44,10 @@ logger = logging.getLogger("token-server")
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI(title="MSB LiveKit Token Server")
+
+# Guest token issuance remains available for the public voice UI, but bounded.
+# Also enforce a shared rate limit at the reverse proxy for multi-worker deployments.
+token_rate_limiter = TokenRateLimiter(max_requests=15, window_seconds=300)
 
 ALLOWED_ORIGINS = os.getenv(
     "CORS_ORIGINS",
@@ -419,8 +424,11 @@ def health_check():
 
 
 @app.post("/api/token")
-async def generate_token(request: TokenRequest):
-    """Generate a LiveKit access token and dispatch the voice agent."""
+async def generate_token(request: TokenRequest, http_request: Request):
+    """Generate a bounded guest LiveKit token and dispatch the voice agent."""
+    peer = http_request.client.host if http_request.client else "unknown"
+    if not token_rate_limiter.allow(peer):
+        raise HTTPException(status_code=429, detail="Too many token requests. Try again later.", headers={"Retry-After": "300"})
     api_key = os.getenv("LIVEKIT_API_KEY")
     api_secret = os.getenv("LIVEKIT_API_SECRET")
     livekit_url = os.getenv("LIVEKIT_URL")  # For agent worker (ws://localhost:7880)
@@ -436,10 +444,10 @@ async def generate_token(request: TokenRequest):
         f"LiveKit URLs - Agent WS: {livekit_url}, Client URL: {token_url}, HTTP: {livekit_http_url}"
     )
 
-    if not api_key or not api_secret:
+    if not api_key or not api_secret or not livekit_url:
         raise HTTPException(
             status_code=500,
-            detail="LIVEKIT_API_KEY and LIVEKIT_API_SECRET must be set.",
+            detail="LIVEKIT_API_KEY, LIVEKIT_API_SECRET and LIVEKIT_URL must be set.",
         )
 
     token = AccessToken(api_key, api_secret)
