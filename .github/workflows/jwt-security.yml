@@ -1,0 +1,24 @@
+name: JWT secret security regression
+
+on:
+  push:
+    branches: [fix/jwt-secret-fail-closed-20261123]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  jwt-startup-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check service Python syntax
+        run: python -m py_compile server/main.py
+      - name: Verify JWT secret rejects missing or known-insecure values
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
