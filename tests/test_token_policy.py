@@ -37,7 +37,7 @@ class TokenSecurityTests(unittest.TestCase):
         self.assertIn("Request", source)
         self.assertIn("token_rate_limiter.allow(", ast.get_source_segment(source, route))
         self.assertIn("status_code=429", ast.get_source_segment(source, route))
-        self.assertIn("request.client.host", ast.get_source_segment(source, route))
+        self.assertIn("http_request.client.host", ast.get_source_segment(source, route))
 
 
 if __name__ == "__main__":
