@@ -61,10 +61,11 @@ app.add_middleware(
 # Authentication (JWT)
 # ---------------------------------------------------------------------------
 
-SECRET_KEY = os.getenv("JWT_SECRET")
-if not SECRET_KEY:
-    logger.warning("JWT_SECRET not set — using insecure default. Set JWT_SECRET in .env for production!")
-    SECRET_KEY = "super-secret-ias-auth-key"
+SECRET_KEY = os.getenv("JWT_SECRET", "").strip()
+if not SECRET_KEY or SECRET_KEY == "super-secret-ias-auth-key":
+    raise RuntimeError(
+        "JWT_SECRET must be set to a unique, non-default secret before starting the API."
+    )
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
 
