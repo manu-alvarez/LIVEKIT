@@ -2,7 +2,7 @@ name: JWT secret security regression
 
 on:
   push:
-    branches: [fix/jwt-secret-fail-closed-20261123]
+    branches: [main]
   pull_request:
     branches: [main]
 
